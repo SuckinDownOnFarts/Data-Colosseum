@@ -11,6 +11,7 @@ const {
   Strategy
 } = require('passport-google-oauth20')
 const cookieSession = require('cookie-session');
+const { verify } = require('crypto');
 const knex = require('knex')({
   client: 'postgres',
   connection: {
@@ -27,8 +28,8 @@ require('dotenv').config();
 const config = {
   CLIENT_ID: process.env.CLIENT_ID,
   CLIENT_SECRET: process.env.CLIENT_SECRET,
-  COOKIE_KEY_1: process.env.COOKIE_KEY_1,
-  COOKIE_KEY_2: process.env.COOKIE_KEY_2,
+  COOKIE_KEY_A: process.env.COOKIE_KEY_A,
+  COOKIE_KEY_B: process.env.COOKIE_KEY_B,
 };
 
 
@@ -42,19 +43,27 @@ const AUTH_OPTIONS = {
 function verifyCallback(accessToken, refreshToken, profile, done) {
   console.log('Google profile', profile);
   done(null, profile);
-}
+};
 
-passport.use(new Strategy(AUTH_OPTIONS, verifyCallback))
+passport.use(new Strategy(AUTH_OPTIONS, verifyCallback));
 
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+}); //Save the session to the cookie
+
+passport.deserializeUser((id, done) => {
+  done(null, id);
+}); //Read the session from the cookie
 
 const app = express(); //SET UP express
 app.use(helmet()); //SET UP helmet
 app.use(cookieSession({
   name: 'session',
   maxAge: 24 * 60 * 60 * 1000,
-  keys: [config.COOKIE_KEY_1, config.COOKIE_KEY_2]
+  keys: [ config.COOKIE_KEY_A, config.COOKIE_KEY_B ],
 })); //SET UP Cookie sessions
 app.use(passport.initialize()); //SET UP passport strategy middleware
+app.use(passport.session()); // Authenticate the session
 app.set('view engine', 'ejs'); //Configure EJS as the view engine
 app.use(express.static('public')); //Static File Middleware for Express
 app.use(bodyParser.urlencoded({
@@ -69,13 +78,40 @@ const st = knexPostgis(knex); //Set up knexpostgis
 
 
 
+app.get('/auth/google', passport.authenticate('google', {
+  scope: ['email'],
+}));
 
-app.get('/', (req, res) => {
-  res.render('home')
+app.get('/auth/google/callback', passport.authenticate('google', {
+  failureRedirect: '/failure',
+  successRedirect: '/',
+  session: true,
+}), (req, res) => {
+  console.log('Google called us back!');
 });
 
+app.get('/auth/logout', (req, res) => {
+  req.logout(); //Removes req.user and clears any logged in session
+  res.redirect('/');
+});
 
-app.post('/', (req, res) => {
+app.get('/secret', checkLoggedIn, (req, res) => {
+  return res.send('Your secret is gay...');
+});
+
+app.get('/failure', (req, res) => {
+  return res.send('Failed to login!');
+})
+
+app.get('/', (req, res) => {
+  res.render('login');
+});
+
+app.get('/app', (req, res) => {
+  res.render('home');
+});
+
+app.post('/app', (req, res) => {
   //Save the user input(address)
   const propAddress = req.body.property;
 
@@ -98,33 +134,8 @@ app.post('/', (req, res) => {
   }).catch((err) => {
     console.log(err);
   });
-  res.redirect('/');
+  res.redirect('/app');
 });
-
-
-app.get('/auth/google', passport.authenticate('google', {
-  scope: ['email'],
-}));
-
-app.get('/auth/google/callback', passport.authenticate('google', {
-  failureRedirect: '/failure',
-  successRedirect: '/',
-  session: false,
-}), (req, res) => {
-  console.log('Google called us back!');
-});
-
-app.get('/auth/logout', (req, res) => {});
-
-app.get('/secret', checkLoggedIn, (req, res) => {
-  return res.send('Your secret is gay...')
-});
-
-app.get('/failure', (req, res) => {
-  return res.send('Failed to login!')
-})
-
-
 
 
 
@@ -181,7 +192,8 @@ async function selectCensusVars(query) {
 
 //Check to see if user is logged in
 function checkLoggedIn(req, res, next) {
-  const isLoggedIn = true;
+  // console.log('Current user is:', req.user);
+  const isLoggedIn = req.isAuthenticated() && req.user;
   if (!isLoggedIn) {
     return res.status(401).json({
       error: 'You must log in!',

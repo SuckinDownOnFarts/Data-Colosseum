@@ -18,7 +18,7 @@
     "knex": "^2.3.0",
     "knex-postgis": "^0.14.3",
     "node-geocoder": "^4.2.0",
-    "passport": "^0.6.0",
+    "passport": "^0.5.3",
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.8.0",
     "turf": "^3.0.14"
