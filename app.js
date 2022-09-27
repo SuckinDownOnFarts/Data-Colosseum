@@ -3,49 +3,30 @@ const https = require('https');
 const fs = require('fs');
 const helmet = require('helmet');
 const ejs = require('ejs');
+const { performance } = require('perf_hooks');
+const computeOverlappedVars = require('./census-data');
 const bodyParser = require('body-parser');
-const nodeGeocoder = require('node-geocoder');
-const knexPostgis = require('knex-postgis')
 const passport = require('passport')
-const {
-  Strategy
-} = require('passport-google-oauth20')
+const { Strategy } = require('passport-google-oauth20')
 const cookieSession = require('cookie-session');
 const { verify } = require('crypto');
-const knex = require('knex')({
-  client: 'postgres',
-  connection: {
-    port: 5432,
-    user: 'postgres',
-    password: '14a5b13wXS!',
-    database: 'postgis_32_sample'
-  }
-});
 
 require('dotenv').config();
 
-
 const config = {
-  CLIENT_ID: process.env.CLIENT_ID,
-  CLIENT_SECRET: process.env.CLIENT_SECRET,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
   COOKIE_KEY_A: process.env.COOKIE_KEY_A,
   COOKIE_KEY_B: process.env.COOKIE_KEY_B,
 };
 
-
-const AUTH_OPTIONS = {
+const GOOGLE_AUTH_OPTIONS = {
   callbackURL: '/auth/google/callback',
-  clientID: config.CLIENT_ID,
-  clientSecret: config.CLIENT_SECRET,
+  clientID: config.GOOGLE_CLIENT_ID,
+  clientSecret: config.GOOGLE_CLIENT_SECRET,
 };
 
-
-function verifyCallback(accessToken, refreshToken, profile, done) {
-  console.log('Google profile', profile);
-  done(null, profile);
-};
-
-passport.use(new Strategy(AUTH_OPTIONS, verifyCallback));
+passport.use(new Strategy(GOOGLE_AUTH_OPTIONS, verifyGoogleCallback));
 
 passport.serializeUser((user, done) => {
   done(null, user.id);
@@ -55,25 +36,41 @@ passport.deserializeUser((id, done) => {
   done(null, id);
 }); //Read the session from the cookie
 
-const app = express(); //SET UP express
-app.use(helmet()); //SET UP helmet
+const app = express();
+app.use(helmet());
 app.use(cookieSession({
   name: 'session',
   maxAge: 24 * 60 * 60 * 1000,
-  keys: [ config.COOKIE_KEY_A, config.COOKIE_KEY_B ],
-})); //SET UP Cookie sessions
-app.use(passport.initialize()); //SET UP passport strategy middleware
-app.use(passport.session()); // Authenticate the session
-app.set('view engine', 'ejs'); //Configure EJS as the view engine
-app.use(express.static('public')); //Static File Middleware for Express
-app.use(bodyParser.urlencoded({
-  extended: true
-})); //Configure Body parser
-let options = {
-  provider: 'openstreetmap'
-}; //Configure the Geocoding Provider
-const geoCoder = nodeGeocoder(options);
-const st = knexPostgis(knex); //Set up knexpostgis
+  keys: [config.COOKIE_KEY_A, config.COOKIE_KEY_B],
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+app.set('view engine', 'ejs');
+app.use(express.static('public'));
+app.use(bodyParser.urlencoded({ extended: true }));
+
+
+
+
+app.get('/', (req, res) => {
+  res.render('login');
+});
+
+app.get('/app', (req, res) => {
+  res.render('home');
+});
+
+app.post('/app', (req, res) => {
+  //Save the user input(address)
+  const propAddress = req.body.property;
+
+  var startTime = performance.now();
+  computeOverlappedVars.computeOverlappedVars(propAddress); //works
+  var endTime = performance.now();
+  console.log(`${endTime - startTime} milliseconds`);
+  res.redirect('/app');
+});
+
 
 
 
@@ -103,92 +100,20 @@ app.get('/failure', (req, res) => {
   return res.send('Failed to login!');
 })
 
-app.get('/', (req, res) => {
-  res.render('login');
+
+const PORT = process.env.PORT || 3000;
+
+https.createServer({
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem'),
+}, app).listen(PORT, (err) => {
+  if (err) console.log("error in Setup")
+  console.log("Connected to Server!");
 });
-
-app.get('/app', (req, res) => {
-  res.render('home');
-});
-
-app.post('/app', (req, res) => {
-  //Save the user input(address)
-  const propAddress = req.body.property;
-
-  //Geocode input to coordinates, construct point geom from coordinates, and insert into pg property_addresses table
-  geoCode(propAddress).then((result) => {
-    const id = (result[0].id.toString())
-
-    makeOverlapTable(id).then((result) => {
-
-      selectCensusVars(result).then((result) => {
-        console.log(result);
-      }).catch((err) => {
-        console.log(err);
-      });
-
-    }).catch((err) => {
-      console.log(err);
-    });
-
-  }).catch((err) => {
-    console.log(err);
-  });
-  res.redirect('/app');
-});
-
-
 
 
 //functions
-async function makeOverlapTable(bufferId) {
-  const geoids = []
 
-  const row = await knex.from('fl').innerJoin('property_addresses', 'fl.join_id', 'property_addresses.join_id').where('property_addresses.id', '=', bufferId)
-    .andWhere(function() {
-      this.where(st.intersects('fl.geom', 'property_addresses.buffer4'))
-    })
-
-  row.forEach((geoid) => {
-    geoids.push(geoid.geoid)
-  });
-  //Insert Geoids
-  const geoidTableId = await knex('geoids').insert({
-    geoids: geoids,
-    address_id: bufferId
-  })
-
-  return geoids
-};
-
-
-
-//Geocode Address to coordinates, construct point geom from coordinates, and insert into pg property_addresses table
-async function geoCode(address) {
-  const coor = await geoCoder.geocode(address)
-  const propertyLong = coor[0].longitude.toString();
-  const propertyLat = coor[0].latitude.toString();
-  const point = {
-    type: 'Point',
-    coordinates: [propertyLong, propertyLat],
-    crs: {
-      type: 'name',
-      properties: {
-        name: 'EPSG:4326'
-      }
-    }
-  }
-  const id = await knex.insert({
-    address: address,
-    coordinates: point,
-  }).returning('id').into('property_addresses')
-  return id
-};
-
-async function selectCensusVars(query) {
-  const table = await knex.select().from('to_pg_dp03').whereIn('geoid', query)
-  return table
-}
 
 //Check to see if user is logged in
 function checkLoggedIn(req, res, next) {
@@ -202,12 +127,7 @@ function checkLoggedIn(req, res, next) {
   next();
 }
 
-const PORT = process.env.PORT || 3000;
-
-https.createServer({
-  key: fs.readFileSync('key.pem'),
-  cert: fs.readFileSync('cert.pem'),
-}, app).listen(PORT, (err) => {
-  if (err) console.log("error in Setup")
-  console.log("Connected to Server!");
-});
+function verifyGoogleCallback(accessToken, refreshToken, profile, done) {
+  console.log('Google profile', profile);
+  done(null, profile);
+};
