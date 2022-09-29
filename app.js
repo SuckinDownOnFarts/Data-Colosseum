@@ -50,8 +50,6 @@ app.use(express.static('public'));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 
-
-
 app.get('/', (req, res) => {
   res.render('login');
 });
@@ -59,6 +57,9 @@ app.get('/', (req, res) => {
 app.get('/app', (req, res) => {
   res.render('home');
 });
+
+
+
 
 app.post('/app', (req, res) => {
   //Save the user input(address)
@@ -70,7 +71,6 @@ app.post('/app', (req, res) => {
   console.log(`${endTime - startTime} milliseconds`);
   res.redirect('/app');
 });
-
 
 
 
@@ -99,7 +99,6 @@ app.get('/secret', checkLoggedIn, (req, res) => {
 app.get('/failure', (req, res) => {
   return res.send('Failed to login!');
 })
-
 
 const PORT = process.env.PORT || 3000;
 
