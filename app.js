@@ -10,6 +10,8 @@ const passport = require('passport')
 const { Strategy } = require('passport-google-oauth20')
 const cookieSession = require('cookie-session');
 const { verify } = require('crypto');
+const Chart = require('chart.js');
+
 
 require('dotenv').config();
 
@@ -58,18 +60,21 @@ app.get('/app', (req, res) => {
   res.render('home');
 });
 
-
+app.get('/dashboard', (req, res) => {
+  res.render('dashboard')
+})
 
 
 app.post('/app', (req, res) => {
   //Save the user input(address)
   const propAddress = req.body.property;
 
-  var startTime = performance.now();
-  computeOverlappedVars.computeOverlappedVars(propAddress); //works
-  var endTime = performance.now();
-  console.log(`${endTime - startTime} milliseconds`);
-  res.redirect('/app');
+  computeOverlappedVars.computeOverlappedVars(propAddress).then(function (result){
+    // console.log(result);
+    res.render('results', {data: result});
+  }); //works
+
+
 });
 
 

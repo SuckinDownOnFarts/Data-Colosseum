@@ -14,16 +14,17 @@ const knex = require('knex')({
 
 const st = knexPostgis(knex); //Set up knexpostgis
 
-module.exports.computeOverlappedVars = async function(geocodeResults) {
+module.exports.computeOverlappedVars = async function (geocodeInput) {
   try {
-    let propertyAddressId = await geoCode(geocodeResults);
+    let propertyAddressId = await geoCode(geocodeInput);
     const id = (propertyAddressId[0].id.toString());
     let overlappingGeoids = await makeOverlapTable(id);
-    let queryResults = await selectCensusVars(overlappingGeoids);
-    // console.log(queryResults);
+    let percentsAndCensusVars = await keyValuePairs(overlappingGeoids);
+    let result = selectCensusVars(percentsAndCensusVars[0], percentsAndCensusVars[1]);
+    return result;
   } catch (err) {
     console.log(err);
-  }
+  };
 };
 
 
@@ -61,6 +62,7 @@ async function makeOverlapTable(bufferId) {
   return query;
 };
 
+
 async function keyValuePairs(overlapQuery) {
   let geoids = [];
   let percentOverlap = []; //array of percentages
@@ -76,55 +78,51 @@ async function keyValuePairs(overlapQuery) {
 
   const query = await knex.select().from('census_vars').whereIn('geoid', Object.keys(obj));
   const varValues = query.map(Object.values); //array of census data results
-
-
+  // const censusKeys = query.map(Object.keys)
+  //
+  // const censusKeysNoId = censusKeys[0].slice(2)
+  // console.log(percentOverlap);
+  // console.log(varValues);
   return [varValues, percentOverlap]
 };
 
 
-//queries the census variable table for the overlapped geoids
-// async function selectCensusVars(values, percents) {
-//   let arr = []
-//
-//   var percentVarCounter = 0;
-//   values.forEach((tract) => {
-//
-//     for (var i = 2; i < tract.length; i++) {
-//
-//       arr.push(tract[i] * (percents[percentVarCounter] / 100))
-//     };
-//     percentVarCounter++
-//
-//   });
-//   return arr;
-// };
+
 
 async function selectCensusVars(values, percents) {
   let arr = []
   let arr2 = []
 
+
   var percentVarCounter = 0;
+
   values.forEach((tract, index) => {
+
     if (index==0) {
-      for (var i = 2; i < tract.length; i++) {
+
+      for (var i = 1; i < tract.length; i++) {
         arr.push(tract[i] * (percents[percentVarCounter] / 100))
       };
+
       percentVarCounter++
+
     } else {
-      for (var i = 2; i < tract.length; i++) {
+
+      for (var i = 1; i < tract.length; i++) {
         arr2.push(tract[i] * (percents[percentVarCounter] / 100))
       };
+
       percentVarCounter++;
 
       var sum = arr.map(function (num, idx) {
         return num + arr2[idx]
       });
+
       arr = sum;
-      delete sum;
-    };
+      arr2.length = 0;
+    }; //END OF ELSE STATEMENT
 
   });
-
   return arr;
 };
 
@@ -134,40 +132,12 @@ async function computeOverlappedVars(geocodeInput) {
     const id = (propertyAddressId[0].id.toString());
     let overlappingGeoids = await makeOverlapTable(id);
     let percentsAndCensusVars = await keyValuePairs(overlappingGeoids);
-    let result = await selectCensusVars(percentsAndCensusVars[0], percentsAndCensusVars[1])
+    let result = await selectCensusVars(percentsAndCensusVars[0], percentsAndCensusVars[1]);
 
-    console.log(percentsAndCensusVars[1]);
-    console.log(result);
   } catch (err) {
     console.log(err);
-  }
+  };
 };
 
 
-computeOverlappedVars('6300 W Bay Pkwy, Panama City, FL 32409')
-
-
-
-
-
-
-
-
-
-// makeOverlapTable(id).then((result) => {
-//   // console.log(result);
-//   let geoids = []
-//   let percentOverlap = []
-//   result.forEach((row) => {
-//     geoids.push(row.geoid)
-//     percentOverlap.push(row.sum)
-//   })
-//   var map = new Map()
-//   for (var i = 0; i < geoids.length; i++){
-//     map.set(geoids[i], percentOverlap[i]);
-//   }
-//   const obj = Object.fromEntries(map)
-//   console.log(obj);
-// }).catch(function (err) {
-//   console.log(err);
-// });
+// computeOverlappedVars('610 Eglin Pkwy NE, Fort Walton Beach, FL 32547')
