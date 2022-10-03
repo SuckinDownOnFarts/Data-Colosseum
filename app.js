@@ -10,7 +10,7 @@ const passport = require('passport')
 const { Strategy } = require('passport-google-oauth20')
 const cookieSession = require('cookie-session');
 const { verify } = require('crypto');
-const Chart = require('chart.js');
+
 
 
 require('dotenv').config();
@@ -70,8 +70,9 @@ app.post('/app', (req, res) => {
   const propAddress = req.body.property;
 
   computeOverlappedVars.computeOverlappedVars(propAddress).then(function (result){
-    // console.log(result);
-    res.render('results', {data: result});
+    const headers = Object.keys(result)
+    const variables = Object.values(result)
+    res.render('results', {data: variables, names: headers});
   }); //works
 
 
