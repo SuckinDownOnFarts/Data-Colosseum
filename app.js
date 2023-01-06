@@ -3,13 +3,17 @@ const https = require('https');
 const fs = require('fs');
 const helmet = require('helmet');
 
-const getCensusData = require('./apis/census-data');
+const getCensusData = require('./apis/application');
 const getPropData = require('./apis/homepage-property-data');
 const buildDashPage = require('./apis/queryPGforDashData');
 const registerController = require('./controllers/registerController');
 const authController = require('./controllers/authController');
 const refreshTokenController = require('./controllers/refreshTokenController');
 const logoutController = require('./controllers/logoutController');
+const sidebarAddress = require('./apis/sidebarAddress');
+
+//Tests api
+const getPopulationData = require('./tempApis/sendPopulationData');
 
 // const verifyJWT = require('./middleware/verifyJWT');
 const bodyParser = require('body-parser');
@@ -67,16 +71,24 @@ app.get('/refresh', refreshTokenController.handleRefreshToken);
 app.get('/logout', logoutController.handleLogout);
 
 //sends dashboard data for specific dash id to react
-app.get('/data/:id', (req, res) => {
-  const queryParam = parseInt(req.params.id)
-  buildDashPage.query(queryParam).then((result) => {
-    res.json(result);
-  })
-});
+// app.get('/data/:id', (req, res) => {
+//   const queryParam = parseInt(req.params.id)
+//   buildDashPage.query(queryParam).then((result) => {
+//     res.json(result);
+//   });
+// });
 
 //sends homepage data to react
 app.get('/properties', (req, res) => {
   getPropData.getPropertyData().then((result) => {
+    res.json(result);
+  });
+});
+
+//sidebar header address fetch
+app.get('/properties/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id)
+  sidebarAddress.query(queryParam).then((result) =>  {
     res.json(result);
   });
 });
@@ -89,6 +101,47 @@ app.post('/posts', (req, res) => {
   });
 });
 
+app.get('/population/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id);
+  getPopulationData.queryPop(queryParam).then((result) => {
+    res.json(result);
+  });
+});
+
+app.get('/housing/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id);
+  getPopulationData.queryPop(queryParam).then((result) => {
+    res.json(result);
+  });
+});
+
+app.get('/income/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id);
+  getPopulationData.queryPop(queryParam).then((result) => {
+    res.json(result);
+  });
+});
+
+app.get('/employement/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id);
+  getPopulationData.queryPop(queryParam).then((result) => {
+    res.json(result);
+  });
+});
+
+app.get('/listing/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id);
+  getPopulationData.queryPop(queryParam).then((result) => {
+    res.json(result);
+  });
+});
+
+app.get('/education/:id', (req, res) => {
+  const queryParam = parseInt(req.params.id);
+  getPopulationData.queryPop(queryParam).then((result) => {
+    res.json(result);
+  });
+});
 
 const PORT = process.env.PORT || 5000;
 
